@@ -1,380 +1,556 @@
+"""
+GHOST AI Chatbot - Advanced Telegram Chatbot
+Deployed on Railway with Docker
+"""
+
+import os
+import time
+import subprocess
+import platform
+import random
+import asyncio
+from datetime import datetime
 from pyrogram import Client, filters
-from pyrogram.types import *
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from pymongo import MongoClient
 import requests
-import random
-import os
 import re
 
-### ============================================> 𝙱𝙾𝚃 𝙼𝙰𝙺𝙸𝙽𝙶 𝚁𝙴𝚀𝚄𝙸𝚁𝙼𝙴𝙽𝚃 <===============================================###
+# =============================================
+# TIME SYNC FIX - Prevents "msg_id too low" error
+# =============================================
 
-API_ID = 10248430 
-API_HASH = "42396a6ff14a569b9d59931643897d0d"
-BOT_TOKEN = "8881596731:AAGsPPhUZuB_tOk5C4gqs2q53D34_BQqkhI"
-MONGO_URL = "mongodb+srv://tghostingbot008:tghostingbot008@cluster0.pkwi0ib.mongodb.net/?appName=Cluster0"
+def sync_time():
+    """Synchronize system time to prevent Telegram errors"""
+    try:
+        print(f"🕐 Current system time: {datetime.now()}")
+        system = platform.system()
+        
+        if system == "Linux":
+            print("🐧 Syncing time on Linux...")
+            try:
+                subprocess.run(["ntpdate", "-u", "pool.ntp.org"], 
+                             check=False, capture_output=True, timeout=10)
+                print("✅ Time synced with ntpdate")
+            except FileNotFoundError:
+                try:
+                    subprocess.run(["timedatectl", "set-ntp", "true"], 
+                                 check=False, capture_output=True)
+                    print("✅ Time synced with timedatectl")
+                except Exception as e:
+                    print(f"⚠️ Time sync failed: {e}")
+                    
+        elif system == "Windows":
+            print("🪟 Syncing time on Windows...")
+            subprocess.run(["w32tm", "/resync"], check=False, capture_output=True)
+            
+        elif system == "Darwin":  # macOS
+            print("🍎 Syncing time on macOS...")
+            subprocess.run(["sntp", "-sS", "time.apple.com"], check=False)
+            
+        print(f"🕐 Updated system time: {datetime.now()}")
+        return True
+        
+    except Exception as e:
+        print(f"⚠️ Could not sync time: {e}")
+        return False
 
+# Sync time before bot starts
+sync_time()
 
+# =============================================
+# BOT CONFIGURATION
+# =============================================
+
+# Get credentials from environment variables
+API_ID = int(os.getenv("API_ID", "10248430"))
+API_HASH = os.getenv("API_HASH", "42396a6ff14a569b9d59931643897d0d")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8881596731:AAGsPPhUZuB_tOk5C4gqs2q53D34_BQqkhI")
+MONGO_URL = os.getenv("MONGO_URL", "mongodb+srv://tghostingbot008:tghostingbot008@cluster0.pkwi0ib.mongodb.net/?appName=Cluster0")
+
+# Initialize bot
 bot = Client(
-    "MrsShayna_Bot" ,
-    api_id = API_ID,
-    api_hash = API_HASH ,
-    bot_token = BOT_TOKEN
+    "GHOST_AI_Bot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN
 )
 
+# =============================================
+# DATABASE SETUP
+# =============================================
+
+def get_db():
+    """Get database connection with retry"""
+    max_retries = 5
+    for i in range(max_retries):
+        try:
+            client = MongoClient(MONGO_URL, serverSelectionTimeoutMS=5000)
+            client.admin.command('ping')
+            print(f"✅ MongoDB connected successfully")
+            return client
+        except Exception as e:
+            print(f"⚠️ MongoDB connection attempt {i+1}/{max_retries} failed: {e}")
+            if i < max_retries - 1:
+                time.sleep(3)
+            else:
+                print("❌ Failed to connect to MongoDB after all retries")
+                raise
+    return None
+
+# Database connections
+db_client = get_db()
+natasha_db = db_client["NatashaDb"]
+natasha_collection = natasha_db["Natasha"]
+word_db = db_client["Word"]
+word_collection = word_db["WordDb"]
+
+# =============================================
+# HELPER FUNCTIONS
+# =============================================
 
 async def is_admins(chat_id: int):
-    return [
-        member.user.id
-        async for member in bot.iter_chat_members(
-            chat_id, filter="administrators"
-        )
-    ]
+    """Get list of admin user IDs in a chat"""
+    try:
+        admins = []
+        async for member in bot.iter_chat_members(chat_id, filter="administrators"):
+            admins.append(member.user.id)
+        return admins
+    except Exception as e:
+        print(f"Error getting admins: {e}")
+        return []
 
-### ============================================> 𝚂𝚃𝙰𝚁𝚃 <===============================================###
+async def get_random_response(word):
+    """Get random response from database for a word"""
+    try:
+        responses = []
+        cursor = word_collection.find({"word": word})
+        async for doc in cursor:
+            responses.append(doc['text'])
+        
+        if responses:
+            response = random.choice(responses)
+            doc = word_collection.find_one({"text": response})
+            if doc:
+                return response, doc.get('check', 'none')
+        return None, None
+    except Exception as e:
+        print(f"Error getting random response: {e}")
+        return None, None
+
+async def send_response(message, response, response_type):
+    """Send appropriate response (text or sticker)"""
+    try:
+        if response_type == "sticker":
+            await message.reply_sticker(response)
+        else:
+            await message.reply_text(response)
+    except Exception as e:
+        print(f"Error sending response: {e}")
+        await message.reply_text("Sorry, I couldn't respond properly. 😅")
+
+# =============================================
+# START COMMAND
+# =============================================
 
 @bot.on_message(filters.command(["start"], prefixes=["/", "!"]))
-async def start(client, message):
-    self = await bot.get_me()
-    busername = self.username
-    if message.chat.type != "private":
-        buttons = InlineKeyboardMarkup(
-            [[
-            InlineKeyboardButton("👥 sᴜᴘᴘᴏʀᴛ", url="https://t.me/+IdSOWT2mDr9hOTQ1"),
-            InlineKeyboardButton("📣 ᴜᴘᴅᴀᴛᴇs", url="https://t.me/+CN0MlYIFGsAyNGI1")
-            ],[InlineKeyboardButton(text="💠 owner 💠",
-                url="https://t.me/GHOSTRIDERFIRE0")]])
-        Photo = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
-        await message.reply_photo(Photo, caption="""➛ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ\n───────────────────\nsᴘᴇᴄɪᴀʟ ғᴇᴀᴛᴜʀᴇs:\n───────────────────\n
-ᴛʜɪꜱ ʙᴏᴛ ᴏʙꜱᴇʀᴠᴇ ᴀʟʟ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄʜᴀᴛ ᴀɴᴅ ꜱᴛᴏʀᴇ ᴀʟʟ ᴛʜᴇ ᴄʜᴀᴛ ɪɴ  ᴅᴀᴛᴀ ᴀɴᴅ  ᴀʟꜱᴏ ɢɪᴠᴇ ʏᴏᴜʀ ʀᴇᴘʟʏ ᴀꜰᴛᴇʀ ᴅᴀᴛᴀ ᴀɴʏʟʏꜱɪꜱ 
-ᴀɴʏ ᴋᴇʏ ɪꜱ ɴᴏᴛ ꜱᴇᴛ ᴜᴘ ɪɴ ᴛʜɪꜱ ʙᴏᴛ ᴛʜɪꜱ ʙᴏᴛ ᴏɴʟʏ ᴏʙꜱᴇʀᴠᴇ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄʜᴀᴛ ᴀɴᴅ ʀᴇᴘʟʏ ʏᴏᴜʀ Qᴜᴇꜱᴛɪᴏɴꜱ ᴄᴏʀʀᴇᴄᴛʟʏ ᴛʜɪꜱ ɪꜱ ᴛʜᴇ ᴏɴʟʏ ᴛʜɪɴɢ ᴡʜɪᴄʜ ᴍᴀᴋᴇ ᴛʜɪꜱ ʙᴏᴛ ᴛʜᴇ ʙᴇꜱᴛ ᴀɴᴅ ꜱᴘᴇᴄɪᴀʟ 
-ꜰɪʀꜱᴛ ᴀᴅᴅ ᴛʜɪꜱ ʙᴏᴛ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ᴏᴘᴇɴ ᴛʜᴇ /ᴄʜᴀᴛʙᴏᴛ ᴏɴ ᴀꜰᴛᴇʀ ᴛʜɪꜱ ʏᴏᴜ ᴡɪʟʟ ᴜɴᴅᴇʀꜱᴛᴀɴᴅ ᴀʟʟ ᴛʜᴇ ᴛʜɪɴɢꜱ.\n───────────────────\n""",
-                            reply_markup=buttons)
+async def start_command(client, message):
+    """Handle /start command"""
+    try:
+        self = await bot.get_me()
+        busername = self.username
         
-    else:
-        buttons = [[
-            InlineKeyboardButton("➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ➕", url=f"https://t.me/GHOST_AI_CHAT_BOT?startgroup=true")
-        ],
+        photo_url = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
         
-        [
-            InlineKeyboardButton("👥 ᴏғғɪᴄɪᴀʟ ɢʀᴏᴜᴘ", url="https://t.me/Ghostrider_fire"),
-            InlineKeyboardButton("📣 ᴏғғɪᴄɪᴀʟ ᴄʜᴀɴɴᴇʟ", url="https://t.me/xtrchannel")
-        ],
-        [
-            InlineKeyboardButton("💠 owner 💠", url="https://t.me/GHOSTRIDERFIRE0")
-        ]]
-        Photo = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
-        await message.reply_photo(Photo, caption=f"""ʜᴇʟʟᴏ [{message.from_user.first_name}](tg://user?id={message.from_user.id}),
-ɪ ᴀᴍ ᴀɴ ᴀᴅᴠᴀɴᴄᴇᴅ ᴀʀᴛɪғɪᴄᴀʟ ᴀɴᴅ ɴᴇxᴛ ʟᴇᴠᴇʟ ɪɴᴛᴇʟʟɪɢᴇɴᴄᴇ ᴄʜᴀᴛ ʙᴏᴛ.
-➖➖➖➖➖➖➖➖➖➖➖➖➖
-➛ ɪғ ʏᴏᴜ ᴀʀᴇ ғᴇᴇʟɪɴɢ ʟᴏɴᴇʟʏ, ʏᴏᴜ ᴄᴀɴ ᴀʟᴡᴀʏs ᴄᴏᴍᴇ ᴛᴏ ᴍᴇ ᴀɴᴅ ᴄʜᴀᴛ ᴡɪᴛʜ ᴍᴇ
-➛ ᴛʀʏ ᴛʜᴇ \help ᴄᴍᴅs. ᴛᴏ ᴋɴᴏᴡ ᴍʏ ᴀʙɪʟɪᴛɪᴇs ××""", reply_markup=InlineKeyboardMarkup(buttons))
+        if message.chat.type != "private":
+            buttons = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("👥 Support", url="https://t.me/+IdSOWT2mDr9hOTQ1"),
+                    InlineKeyboardButton("📣 Updates", url="https://t.me/+CN0MlYIFGsAyNGI1")
+                ],
+                [
+                    InlineKeyboardButton("💠 Owner", url="https://t.me/GHOSTRIDERFIRE0")
+                ]
+            ])
+            
+            caption = """➛ START THE BOT
+───────────────────
+SPECIAL FEATURES:
+───────────────────
 
-### ============================================> 𝙷𝙴𝙻𝙿 <===============================================###
+This bot observes all group chats and stores all the chat in data and also gives your reply after data analysis
+
+Any key is not set up in this bot. This bot only observes the group chat and replies to your questions correctly. This is the only thing which makes this bot the best and special
+
+First add this bot in your group and open /chatbot on. After this you will understand all the things.
+───────────────────"""
+            
+            await message.reply_photo(photo_url, caption=caption, reply_markup=buttons)
+        else:
+            buttons = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("➕ Add Me To Your Group", url=f"https://t.me/GHOST_AI_CHAT_BOT?startgroup=true")
+                ],
+                [
+                    InlineKeyboardButton("👥 Official Group", url="https://t.me/Ghostrider_fire"),
+                    InlineKeyboardButton("📣 Official Channel", url="https://t.me/xtrchannel")
+                ],
+                [
+                    InlineKeyboardButton("💠 Owner", url="https://t.me/GHOSTRIDERFIRE0")
+                ]
+            ])
+            
+            caption = f"""Hello [{message.from_user.first_name}](tg://user?id={message.from_user.id}),
+
+I am an advanced artificial and next level intelligence chat bot.
+➖➖➖➖➖➖➖➖➖➖➖➖➖
+
+➛ If you are feeling lonely, you can always come to me and chat with me
+➛ Try /help cmd to know my abilities"""
+            
+            await message.reply_photo(photo_url, caption=caption, reply_markup=buttons)
+            
+    except Exception as e:
+        print(f"Error in start command: {e}")
+        await message.reply_text("An error occurred. Please try again later.")
+
+# =============================================
+# HELP COMMAND
+# =============================================
 
 @bot.on_message(filters.command(["help"], prefixes=["/", "!"]))
-async def help(client, message):
-    self = await bot.get_me()
-    busername = self.username
-    if message.chat.type != "private":
-        buttons = InlineKeyboardMarkup(
-            [[InlineKeyboardButton(text="ᴄʟɪᴄᴋ ʜᴇʀᴇ",
-                url=f"t.me/MissShayna_Bot?start=help_")]])
-        Photo = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
-        await message.reply_photo(Photo, caption="ᴄᴏɴᴛᴀᴄᴛ ᴍᴇ ɪɴ ᴘᴇʀsᴏɴᴀʟ sᴡᴇᴇᴛʜᴇᴀʀᴛ",
-                            reply_markup=buttons)
+async def help_command(client, message):
+    """Handle /help command"""
+    try:
+        photo_url = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
         
-    else: 
-        Photo = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
-        await message.reply_photo(Photo, caption="""➛ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ\n─────────────────────\nsᴘᴇᴄɪᴀʟ ғᴇᴀᴛᴜʀᴇs:\n
-ᴛʜɪꜱ ʙᴏᴛ ᴏʙꜱᴇʀᴠᴇ ᴀʟʟ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄʜᴀᴛ ᴀɴᴅ ꜱᴛᴏʀᴇ ᴀʟʟ ᴛʜᴇ ᴄʜᴀᴛ ɪɴ  ᴅᴀᴛᴀ ᴀɴᴅ  ᴀʟꜱᴏ ɢɪᴠᴇ ʏᴏᴜʀ ʀᴇᴘʟʏ ᴀꜰᴛᴇʀ ᴅᴀᴛᴀ ᴀɴʏʟʏꜱɪꜱ 
+        if message.chat.type != "private":
+            buttons = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Click Here", url="https://t.me/GHOST_AI_CHAT_BOT?start=help_")]
+            ])
+            await message.reply_photo(photo_url, caption="Contact me in personal sweetheart", reply_markup=buttons)
+        else:
+            caption = """➛ START THE BOT
+─────────────────────
+SPECIAL FEATURES:
 
-ᴀɴʏ ᴋᴇʏ ɪꜱ ɴᴏᴛ ꜱᴇᴛ ᴜᴘ ɪɴ ᴛʜɪꜱ ʙᴏᴛ ᴛʜɪꜱ ʙᴏᴛ ᴏɴʟʏ ᴏʙꜱᴇʀᴠᴇ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄʜᴀᴛ ᴀɴᴅ ʀᴇᴘʟʏ ʏᴏᴜʀ Qᴜᴇꜱᴛɪᴏɴꜱ ᴄᴏʀʀᴇᴄᴛʟʏ ᴛʜɪꜱ ɪꜱ ᴛʜᴇ ᴏɴʟʏ ᴛʜɪɴɢ ᴡʜɪᴄʜ ᴍᴀᴋᴇ ᴛʜɪꜱ ʙᴏᴛ ᴛʜᴇ ʙᴇꜱᴛ ᴀɴᴅ ꜱᴘᴇᴄɪᴀʟ 
+This bot observes all group chats and stores all the chat in data and also gives your reply after data analysis
 
-ꜰɪʀꜱᴛ ᴀᴅᴅ ᴛʜɪꜱ ʙᴏᴛ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ᴏᴘᴇɴ ᴛʜᴇ /ᴄʜᴀᴛʙᴏᴛ ᴏɴ ᴀꜰᴛᴇʀ ᴛʜɪꜱ ʏᴏᴜ ᴡɪʟʟ ᴜɴᴅᴇʀꜱᴛᴀɴᴅ ᴀʟʟ ᴛʜᴇ ᴛʜɪɴɢꜱ.
+Any key is not set up in this bot. This bot only observes the group chat and replies to your questions correctly. This is the only thing which makes this bot the best and special
 
-─────────────────────\n\n➛ /chatbot on - ᴀᴄᴛɪᴠᴇ ᴄʜᴀᴛʙᴏᴛ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ\n➛ /chatbot off - ᴅɪsᴀʙʟᴇ ᴄʜᴀᴛʙᴏᴛ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ""")
+First add this bot in your group and open /chatbot on. After this you will understand all the things.
 
-### ============================================> 𝙲𝙷𝙰𝚃𝙱𝙾𝚃 𝙾𝙵𝙵 <===============================================###
+─────────────────────
+
+➛ /chatbot on - Activate chatbot in your group
+➛ /chatbot off - Disable chatbot in your group"""
+            
+            await message.reply_photo(photo_url, caption=caption)
+            
+    except Exception as e:
+        print(f"Error in help command: {e}")
+        await message.reply_text("An error occurred. Please try again later.")
+
+# =============================================
+# CHATBOT ON/OFF COMMANDS
+# =============================================
+
+@bot.on_message(filters.command("chatbot off", prefixes=["/", ".", "?", "-"]) & ~filters.private)
+async def chatbot_off(client, message):
+    """Turn off chatbot in a group"""
+    try:
+        if message.from_user:
+            user = message.from_user.id
+            chat_id = message.chat.id
+            
+            admins = await is_admins(chat_id)
+            if user not in admins:
+                await message.reply_text("Sir you are not admin. AB chala jaa bana du admin 😂")
+                return
+        
+        is_chatbot = natasha_collection.find_one({"chat_id": message.chat.id})
+        
+        if not is_chatbot:
+            natasha_collection.insert_one({"chat_id": message.chat.id})
+            await message.reply_text("Shayna chatbot disabled\n\nDarling off kyu kr rhe ho mujhe\nThik hai by vaise bhi tumne meri\nLife fuckm fuck bna rkhi hai\nAb jaa BSDK k pdh kyu rha hai 😂")
+        else:
+            await message.reply_text("Shayna chatbot is already disabled\n\nPhele se hi off hu ab jaaao ab tum mujhse baat kro.")
+            
+    except Exception as e:
+        print(f"Error in chatbot off: {e}")
+        await message.reply_text("An error occurred. Please try again later.")
+
+@bot.on_message(filters.command("chatbot on", prefixes=["/", ".", "?", "-"]) & ~filters.private)
+async def chatbot_on(client, message):
+    """Turn on chatbot in a group"""
+    try:
+        if message.from_user:
+            user = message.from_user.id
+            chat_id = message.chat.id
+            
+            admins = await is_admins(chat_id)
+            if user not in admins:
+                await message.reply_text("Sir you are not admin. AB chala jaa bana du admin 😂")
+                return
+        
+        is_chatbot = natasha_collection.find_one({"chat_id": message.chat.id})
+        
+        if not is_chatbot:
+            await message.reply_text("» Chatbot is already enabled\n\nAre darling phele se hi hu\nOr ye cmd mt diya kro 😅👉👈😂")
+        else:
+            natasha_collection.delete_one({"chat_id": message.chat.id})
+            await message.reply_text(f"""✅ | Successfully
+Shayna chatbot on of this group is set to @{message.chat.username}
+Requested by [{message.from_user.first_name}](tg://user?id={message.from_user.id})
+Powered by Tech Guard""")
+            
+    except Exception as e:
+        print(f"Error in chatbot on: {e}")
+        await message.reply_text("An error occurred. Please try again later.")
+
+# =============================================
+# CHATBOT INFO COMMAND
+# =============================================
+
+@bot.on_message(filters.command("chatbot", prefixes=["/", ".", "?", "-"]) & ~filters.private)
+async def chatbot_info(client, message):
+    """Show chatbot information"""
+    try:
+        photo_url = "https://telegra.ph/file/e81a49fb4985e64da516c.jpg"
+        await message.reply_photo(photo_url)
+        
+        caption = """**How to use Shayna:**
+➛ Special Features:
+This bot observes all group chats and stores all the chat in data and also gives your reply after data analysis
+
+Any key is not set up in this bot. This bot only observes the group chat and replies to your questions correctly. This is the only thing which makes this bot the best and special
+
+First add this bot in your group and open /chatbot on. After this you will understand all the things.
+
+─────────────────────
+
+➛ /chatbot on - Activate chatbot in your group
+➛ /chatbot off - Disable chatbot in your group"""
+        
+        await message.reply_text(caption)
+        
+    except Exception as e:
+        print(f"Error in chatbot info: {e}")
+        await message.reply_text("An error occurred. Please try again later.")
+
+# =============================================
+# MESSAGE HANDLERS
+# =============================================
 
 @bot.on_message(
-    filters.command("chatbot off", prefixes=["/", ".", "?", "-"])
-    & ~filters.private)
-async def chatbotofd(client, message):
-    natashadb = MongoClient(MONGO_URL)    
-    natasha = natashadb["NatashaDb"]["Natasha"]     
-    if message.from_user:
-        user = message.from_user.id
-        chat_id = message.chat.id
-        if user not in (
-           await is_admins(chat_id)
-        ):
-           return await message.reply_text(
-                "sɪʀ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴅᴍɪɴ.ᴀʙ ᴄʜʟᴀ ᴊᴀᴀ  ʙɴᴀ ᴅᴜ ᴀᴅᴍɪɴ 😂"
-            )
-    is_natasha = natasha.find_one({"chat_id": message.chat.id})
-    if not is_natasha:
-        natasha.insert_one({"chat_id": message.chat.id})
-        await message.reply_text(f"Shayna ᴄʜᴀᴛʙᴏᴛ ᴅɪsᴀʙʟᴇᴅ\n\nᴅᴀʀʟɪɴɢ ᴏғғ ᴋʏᴜ ᴋʀ ʀʜᴇ ʜᴏ ᴍᴜᴊʜᴇ\nᴛʜɪᴋ ʜᴀɪ ʙʏ ᴠᴀɪsᴇ ʙʜɪ ᴛᴜᴍɴᴇ ᴍᴇʀɪ\nʟɪғᴇ ғᴜᴄᴋᴍ ғᴜᴄᴋ ʙɴᴀ ʀᴋʜɪ ʜᴀɪ\nᴀʙ ᴊᴀᴀ ʙsᴅᴋ ᴋ ᴘᴅʜ ᴋʏᴜ ʀʜᴀ ʜᴀɪ 😂")
-    if is_natasha:
-        await message.reply_text(f"Shayna ᴄʜᴀᴛʙᴏᴛ ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ\n\nᴘʜᴇʟᴇ sᴇ ʜɪ ᴏғғ ʜᴜ ᴀʙ\nᴊᴀᴀᴏ ᴀʙ ᴛᴜᴍ ᴍᴜᴊʜsᴇ ʙᴀᴀᴛ ᴋʀᴏ .")
+    (filters.text | filters.sticker) & ~filters.private & ~filters.bot,
+)
+async def handle_group_messages(client: Client, message: Message):
+    """Handle messages in groups"""
+    try:
+        # Check if chatbot is disabled in this group
+        is_chatbot = natasha_collection.find_one({"chat_id": message.chat.id})
+        if is_chatbot:
+            return
+        
+        # For messages without reply
+        if not message.reply_to_message:
+            await bot.send_chat_action(message.chat.id, "typing")
+            
+            # Handle text messages
+            if message.text:
+                response, response_type = await get_random_response(message.text)
+                if response:
+                    await send_response(message, response, response_type)
+            
+            # Handle sticker messages
+            elif message.sticker:
+                response, response_type = await get_random_response(message.sticker.file_unique_id)
+                if response:
+                    await send_response(message, response, response_type)
+        
+        # For replies to messages
+        elif message.reply_to_message:
+            getme = await bot.get_me()
+            bot_id = getme.id
+            
+            # If replying to bot's message
+            if message.reply_to_message.from_user.id == bot_id:
+                is_chatbot = natasha_collection.find_one({"chat_id": message.chat.id})
+                if is_chatbot:
+                    return
+                
+                await bot.send_chat_action(message.chat.id, "typing")
+                
+                # Handle text reply
+                if message.text:
+                    response, response_type = await get_random_response(message.text)
+                    if response:
+                        await send_response(message, response, response_type)
+                
+                # Handle sticker reply
+                elif message.sticker:
+                    response, response_type = await get_random_response(message.sticker.file_unique_id)
+                    if response:
+                        await send_response(message, response, response_type)
+            
+            # If replying to someone else's message - learn from it
+            elif message.reply_to_message.from_user.id != bot_id:
+                # Learn text response
+                if message.text and message.reply_to_message.text:
+                    exists = word_collection.find_one({
+                        "word": message.reply_to_message.text,
+                        "text": message.text
+                    })
+                    if not exists:
+                        word_collection.insert_one({
+                            "word": message.reply_to_message.text,
+                            "text": message.text,
+                            "check": "none"
+                        })
+                
+                # Learn sticker response to text
+                elif message.sticker and message.reply_to_message.text:
+                    exists = word_collection.find_one({
+                        "word": message.reply_to_message.text,
+                        "id": message.sticker.file_unique_id
+                    })
+                    if not exists:
+                        word_collection.insert_one({
+                            "word": message.reply_to_message.text,
+                            "text": message.sticker.file_id,
+                            "check": "sticker",
+                            "id": message.sticker.file_unique_id
+                        })
+                
+                # Learn text response to sticker
+                elif message.text and message.reply_to_message.sticker:
+                    exists = word_collection.find_one({
+                        "word": message.reply_to_message.sticker.file_unique_id,
+                        "text": message.text
+                    })
+                    if not exists:
+                        word_collection.insert_one({
+                            "word": message.reply_to_message.sticker.file_unique_id,
+                            "text": message.text,
+                            "check": "text"
+                        })
+                
+                # Learn sticker response to sticker
+                elif message.sticker and message.reply_to_message.sticker:
+                    exists = word_collection.find_one({
+                        "word": message.reply_to_message.sticker.file_unique_id,
+                        "text": message.sticker.file_id
+                    })
+                    if not exists:
+                        word_collection.insert_one({
+                            "word": message.reply_to_message.sticker.file_unique_id,
+                            "text": message.sticker.file_id,
+                            "check": "none"
+                        })
+                    
+    except Exception as e:
+        print(f"Error in group message handler: {e}")
+
+@bot.on_message(
+    (filters.text | filters.sticker) & filters.private & ~filters.bot,
+)
+async def handle_private_messages(client: Client, message: Message):
+    """Handle private messages"""
+    try:
+        await bot.send_chat_action(message.chat.id, "typing")
+        
+        # For messages without reply
+        if not message.reply_to_message:
+            # Handle text
+            if message.text:
+                response, response_type = await get_random_response(message.text)
+                if response:
+                    await send_response(message, response, response_type)
+            
+            # Handle sticker
+            elif message.sticker:
+                response, response_type = await get_random_response(message.sticker.file_unique_id)
+                if response:
+                    await send_response(message, response, response_type)
+        
+        # For replies to bot's messages
+        elif message.reply_to_message:
+            getme = await bot.get_me()
+            bot_id = getme.id
+            
+            if message.reply_to_message.from_user.id == bot_id:
+                # Handle text reply
+                if message.text:
+                    response, response_type = await get_random_response(message.text)
+                    if response:
+                        await send_response(message, response, response_type)
+                
+                # Handle sticker reply
+                elif message.sticker:
+                    response, response_type = await get_random_response(message.sticker.file_unique_id)
+                    if response:
+                        await send_response(message, response, response_type)
+                    
+    except Exception as e:
+        print(f"Error in private message handler: {e}")
+        await message.reply_text("An error occurred. Please try again later.")
+
+# =============================================
+# HEALTH CHECK
+# =============================================
+
+@bot.on_message(filters.command(["ping", "health"], prefixes=["/", "!"]))
+async def health_check(client, message):
+    """Health check endpoint"""
+    try:
+        start_time = time.time()
+        await message.reply_chat_action("typing")
+        
+        # Check MongoDB connection
+        try:
+            db_client.admin.command('ping')
+            db_status = "✅ Connected"
+        except:
+            db_status = "❌ Disconnected"
+        
+        response = f"""**Bot Status**
+━━━━━━━━━━━━━━━━
+🤖 Bot: ✅ Running
+💾 Database: {db_status}
+🕐 Uptime: {time.time() - start_time:.2f}s
+━━━━━━━━━━━━━━━━
+Power by Tech Guard"""
+        
+        await message.reply_text(response)
+        
+    except Exception as e:
+        print(f"Error in health check: {e}")
+        await message.reply_text("⚠️ Bot is running but some features may be degraded.")
+
+# =============================================
+# BOT STARTUP
+# =============================================
+
+if __name__ == "__main__":
+    print("=" * 50)
+    print("🤖 Starting GHOST AI Chatbot")
+    print("=" * 50)
+    print(f"🔹 Bot Token: {BOT_TOKEN[:10]}...")
+    print(f"🔹 API ID: {API_ID}")
+    print(f"🔹 MongoDB: {MONGO_URL[:30]}...")
+    print("=" * 50)
+    print("🔄 Initializing bot...")
     
-### ============================================> 𝙲𝙷𝙰𝚃𝙱𝙾𝚃 𝙾𝙽 <===============================================###
-
-@bot.on_message(
-    filters.command("chatbot on", prefixes=["/", ".", "?", "-"])
-    & ~filters.private)
-async def chatboton(client, message):
-    natashadb = MongoClient(MONGO_URL)    
-    natasha = natashadb["NatashaDb"]["Natasha"]     
-    if message.from_user:
-        user = message.from_user.id
-        chat_id = message.chat.id
-        if user not in (
-            await is_admins(chat_id)
-        ):
-            return await message.reply_text(
-                "sɪʀ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴅᴍɪɴ.ᴀʙ ᴄʜʟᴀ ᴊᴀᴀ  ʙɴᴀ ᴅᴜ ᴀᴅᴍɪɴ 😂"
-            )
-    is_natasha = natasha.find_one({"chat_id": message.chat.id})
-    if not is_natasha:           
-        await message.reply_text(f"» ᴄʜᴀᴛʙᴏᴛ ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ\n\nᴀʀᴇ ᴅᴀʀʟɪɴɢ ᴘʜᴇʟᴇ sᴇ ʜɪ ᴏɴ ʜᴜ\nᴏʀ ʏᴇ ᴄᴍᴅ ᴍᴛ ᴅɪʏᴀ ᴋʀᴏ  😅👉👈😂")
-    if is_natasha:
-        natasha.delete_one({"chat_id": message.chat.id})
-        await message.reply_text(f"✅ | sᴜᴄᴄᴇssғᴜʟʟʏ\nShayna ᴄʜᴀᴛʙᴏᴛ ᴏɴ ᴏғ ᴛʜɪs ɢʀᴏᴜᴘ ɪs sᴇᴛ ᴛᴏ @{message.chat.username}\n ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ [{message.from_user.first_name}](tg://user?id={message.from_user.id})\nᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴛᴇᴄʜ ǫᴜᴀʀᴅ")
-    
-## ============================================> 𝙲𝙷𝙰𝚃𝙱𝙾𝚃 <===============================================###
-
-@bot.on_message(
-    filters.command("chatbot", prefixes=["/", ".", "?", "-"])
-    & ~filters.private)
-async def chatbot(client, message):
-        await message.reply_photo("https://telegra.ph/file/e81a49fb4985e64da516c.jpg")
-        await message.reply_text(f"""**ʜᴏᴡ ᴛᴏ ᴜsᴇ Shayna:**\n➛ sᴘᴇᴄɪᴀʟ ғᴇᴀᴛᴜʀᴇs:\nᴛʜɪꜱ ʙᴏᴛ ᴏʙꜱᴇʀᴠᴇ ᴀʟʟ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄʜᴀᴛ ᴀɴᴅ ꜱᴛᴏʀᴇ ᴀʟʟ ᴛʜᴇ ᴄʜᴀᴛ ɪɴ  ᴅᴀᴛᴀ ᴀɴᴅ  ᴀʟꜱᴏ ɢɪᴠᴇ ʏᴏᴜʀ ʀᴇᴘʟʏ ᴀꜰᴛᴇʀ ᴅᴀᴛᴀ ᴀɴʏʟʏꜱɪꜱ 
-
-ᴀɴʏ ᴋᴇʏ ɪꜱ ɴᴏᴛ ꜱᴇᴛ ᴜᴘ ɪɴ ᴛʜɪꜱ ʙᴏᴛ ᴛʜɪꜱ ʙᴏᴛ ᴏɴʟʏ ᴏʙꜱᴇʀᴠᴇ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄʜᴀᴛ ᴀɴᴅ ʀᴇᴘʟʏ ʏᴏᴜʀ Qᴜᴇꜱᴛɪᴏɴꜱ ᴄᴏʀʀᴇᴄᴛʟʏ ᴛʜɪꜱ ɪꜱ ᴛʜᴇ ᴏɴʟʏ ᴛʜɪɴɢ ᴡʜɪᴄʜ ᴍᴀᴋᴇ ᴛʜɪꜱ ʙᴏᴛ ᴛʜᴇ ʙᴇꜱᴛ ᴀɴᴅ ꜱᴘᴇᴄɪᴀʟ 
-
-ꜰɪʀꜱᴛ ᴀᴅᴅ ᴛʜɪꜱ ʙᴏᴛ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ᴏᴘᴇɴ ᴛʜᴇ /ᴄʜᴀᴛʙᴏᴛ ᴏɴ ᴀꜰᴛᴇʀ ᴛʜɪꜱ ʏᴏᴜ ᴡɪʟʟ ᴜɴᴅᴇʀꜱᴛᴀɴᴅ ᴀʟʟ ᴛʜᴇ ᴛʜɪɴɢꜱ.
-
-─────────────────────\n\n➛ /chatbot on - ᴀᴄᴛɪᴠᴇ ᴄʜᴀᴛʙᴏᴛ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ\n➛ /chatbot off - ᴅɪsᴀʙʟᴇ ᴄʜᴀᴛʙᴏᴛ ɪɴ ʏᴏᴜʀ ɢʀᴏᴜᴘ""")
-
-## ============================================> 𝙱𝙾𝚃 𝙼𝙴𝚂𝚂𝙰𝙶𝙴𝚂 𝙲𝙾𝙳𝙴 <===============================================###
-
-@bot.on_message(
- (
-        filters.text
-        | filters.sticker
-    )
-    & ~filters.private
-    & ~filters.bot,
-)
-async def natashaai(client: Client, message: Message):
-
-   chatdb = MongoClient(MONGO_URL)
-   chatai = chatdb["Word"]["WordDb"]   
-
-   if not message.reply_to_message:
-       natashadb = MongoClient(MONGO_URL)
-       natasha = natashadb["NatashaDb"]["Natasha"] 
-       is_natasha = natasha.find_one({"chat_id": message.chat.id})
-       if not is_natasha:
-           await bot.send_chat_action(message.chat.id, "typing")
-           K = []  
-           is_chat = chatai.find({"word": message.text})  
-           k = chatai.find_one({"word": message.text})      
-           if k:               
-               for x in is_chat:
-                   K.append(x['text'])          
-               hey = random.choice(K)
-               is_text = chatai.find_one({"text": hey})
-               Yo = is_text['check']
-               if Yo == "sticker":
-                   await message.reply_sticker(f"{hey}")
-               if not Yo == "sticker":
-                   await message.reply_text(f"{hey}")
-   
-   if message.reply_to_message:  
-       natashadb = MongoClient(MONGO_URL)
-       natasha = natashadb["NatashaDb"]["Natasha"] 
-       is_natasha = natasha.find_one({"chat_id": message.chat.id})    
-       getme = await bot.get_me()
-       bot_id = getme.id                             
-       if message.reply_to_message.from_user.id == bot_id: 
-           if not is_natasha:                   
-               await bot.send_chat_action(message.chat.id, "typing")
-               K = []  
-               is_chat = chatai.find({"word": message.text})
-               k = chatai.find_one({"word": message.text})      
-               if k:       
-                   for x in is_chat:
-                       K.append(x['text'])
-                   hey = random.choice(K)
-                   is_text = chatai.find_one({"text": hey})
-                   Yo = is_text['check']
-                   if Yo == "sticker":
-                       await message.reply_sticker(f"{hey}")
-                   if not Yo == "sticker":
-                       await message.reply_text(f"{hey}")
-       if not message.reply_to_message.from_user.id == bot_id:          
-           if message.sticker:
-               is_chat = chatai.find_one({"word": message.reply_to_message.text, "id": message.sticker.file_unique_id})
-               if not is_chat:
-                   chatai.insert_one({"word": message.reply_to_message.text, "text": message.sticker.file_id, "check": "sticker", "id": message.sticker.file_unique_id})
-           if message.text:                 
-               is_chat = chatai.find_one({"word": message.reply_to_message.text, "text": message.text})                 
-               if not is_chat:
-                   chatai.insert_one({"word": message.reply_to_message.text, "text": message.text, "check": "none"})    
-               
-
-@bot.on_message(
- (
-        filters.sticker
-        | filters.text
-    )
-    & ~filters.private
-    & ~filters.bot,
-)
-async def natashastickerai(client: Client, message: Message):
-
-   chatdb = MongoClient(MONGO_URL)
-   chatai = chatdb["Word"]["WordDb"]   
-
-   if not message.reply_to_message:
-       natashadb = MongoClient(MONGO_URL)
-       natasha = natashadb["NatashaDb"]["Natasha"] 
-       is_natasha = natasha.find_one({"chat_id": message.chat.id})
-       if not is_natasha:
-           await bot.send_chat_action(message.chat.id, "typing")
-           K = []  
-           is_chat = chatai.find({"word": message.sticker.file_unique_id})      
-           k = chatai.find_one({"word": message.text})      
-           if k:           
-               for x in is_chat:
-                   K.append(x['text'])
-               hey = random.choice(K)
-               is_text = chatai.find_one({"text": hey})
-               Yo = is_text['check']
-               if Yo == "text":
-                   await message.reply_text(f"{hey}")
-               if not Yo == "text":
-                   await message.reply_sticker(f"{hey}")
-   
-   if message.reply_to_message:
-       natashadb = MongoClient(MONGO_URL)
-       natasha = natashadb["NatashaDb"]["Natasha"] 
-       is_natasha = natasha.find_one({"chat_id": message.chat.id})
-       getme = await bot.get_me()
-       bot_id = getme.id
-       if message.reply_to_message.from_user.id == bot_id: 
-           if not is_natasha:                    
-               await bot.send_chat_action(message.chat.id, "typing")
-               K = []  
-               is_chat = chatai.find({"word": message.text})
-               k = chatai.find_one({"word": message.text})      
-               if k:           
-                   for x in is_chat:
-                       K.append(x['text'])
-                   hey = random.choice(K)
-                   is_text = chatai.find_one({"text": hey})
-                   Yo = is_text['check']
-                   if Yo == "text":
-                       await message.reply_text(f"{hey}")
-                   if not Yo == "text":
-                       await message.reply_sticker(f"{hey}")
-       if not message.reply_to_message.from_user.id == bot_id:          
-           if message.text:
-               is_chat = chatai.find_one({"word": message.reply_to_message.sticker.file_unique_id, "text": message.text})
-               if not is_chat:
-                   toggle.insert_one({"word": message.reply_to_message.sticker.file_unique_id, "text": message.text, "check": "text"})
-           if message.sticker:                 
-               is_chat = chatai.find_one({"word": message.reply_to_message.sticker.file_unique_id, "text": message.sticker.file_id})                 
-               if not is_chat:
-                   chatai.insert_one({"word": message.reply_to_message.sticker.file_unique_id, "text": message.sticker.file_id, "check": "none"})    
-               
-
-
-@bot.on_message(
-    (
-        filters.text
-        | filters.sticker
-    )
-    & filters.private
-    & ~filters.bot,
-)
-async def natashaprivate(client: Client, message: Message):
-
-   chatdb = MongoClient(MONGO_URL)
-   chatai = chatdb["Word"]["WordDb"]
-   if not message.reply_to_message: 
-       await bot.send_chat_action(message.chat.id, "typing")
-       K = []  
-       is_chat = chatai.find({"word": message.text})                 
-       for x in is_chat:
-           K.append(x['text'])
-       hey = random.choice(K)
-       is_text = chatai.find_one({"text": hey})
-       Yo = is_text['check']
-       if Yo == "sticker":
-           await message.reply_sticker(f"{hey}")
-       if not Yo == "sticker":
-           await message.reply_text(f"{hey}")
-   if message.reply_to_message:            
-       getme = await bot.get_me()
-       bot_id = getme.id       
-       if message.reply_to_message.from_user.id == bot_id:                    
-           await bot.send_chat_action(message.chat.id, "typing")
-           K = []  
-           is_chat = chatai.find({"word": message.text})                 
-           for x in is_chat:
-               K.append(x['text'])
-           hey = random.choice(K)
-           is_text = chatai.find_one({"text": hey})
-           Yo = is_text['check']
-           if Yo == "sticker":
-               await message.reply_sticker(f"{hey}")
-           if not Yo == "sticker":
-               await message.reply_text(f"{hey}")
-       
-
-@bot.on_message(
- (
-        filters.sticker
-        | filters.text
-    )
-    & filters.private
-    & ~filters.bot,
-)
-async def natashaprivatesticker(client: Client, message: Message):
-
-   chatdb = MongoClient(MONGO_URL)
-   chatai = chatdb["Word"]["WordDb"] 
-   if not message.reply_to_message:
-       await bot.send_chat_action(message.chat.id, "typing")
-       K = []  
-       is_chat = chatai.find({"word": message.sticker.file_unique_id})                 
-       for x in is_chat:
-           K.append(x['text'])
-       hey = random.choice(K)
-       is_text = chatai.find_one({"text": hey})
-       Yo = is_text['check']
-       if Yo == "text":
-           await message.reply_text(f"{hey}")
-       if not Yo == "text":
-           await message.reply_sticker(f"{hey}")
-   if message.reply_to_message:            
-       getme = await bot.get_me()
-       bot_id = getme.id       
-       if message.reply_to_message.from_user.id == bot_id:                    
-           await bot.send_chat_action(message.chat.id, "typing")
-           K = []  
-           is_chat = chatai.find({"word": message.sticker.file_unique_id})                 
-           for x in is_chat:
-               K.append(x['text'])
-           hey = random.choice(K)
-           is_text = chatai.find_one({"text": hey})
-           Yo = is_text['check']
-           if Yo == "text":
-               await message.reply_text(f"{hey}")
-           if not Yo == "text":
-               await message.reply_sticker(f"{hey}")
-       
-bot.run()
+    try:
+        bot.run()
+    except Exception as e:
+        print(f"❌ Bot crashed: {e}")
+        print("🔄 Attempting to restart in 5 seconds...")
+        time.sleep(5)
+        # Railway will handle restart
+        try:
+            bot.run()
+        except Exception as e2:
+            print(f"❌ Bot failed to restart: {e2}")
+            raise
