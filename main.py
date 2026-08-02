@@ -10,8 +10,8 @@ import re
 
 API_ID = 10248430 
 API_HASH = "42396a6ff14a569b9d59931643897d0d"
-BOT_TOKEN = "5709229627:AAHWn-lp3r3BXK7kRs8_vnmRIQnUMHRV2bU"
-MONGO_URL = "mongodb+srv://AyraMusic:Ayra@cluster0.gnakzem.mongodb.net/?retryWrites=true&w=majority"
+BOT_TOKEN = "8881596731:AAGsPPhUZuB_tOk5C4gqs2q53D34_BQqkhI"
+MONGO_URL = "mongodb+srv://tghostingbot008:tghostingbot008@cluster0.pkwi0ib.mongodb.net/?appName=Cluster0"
 
 
 bot = Client(
@@ -42,8 +42,8 @@ async def start(client, message):
             InlineKeyboardButton("👥 sᴜᴘᴘᴏʀᴛ", url="https://t.me/+IdSOWT2mDr9hOTQ1"),
             InlineKeyboardButton("📣 ᴜᴘᴅᴀᴛᴇs", url="https://t.me/+CN0MlYIFGsAyNGI1")
             ],[InlineKeyboardButton(text="💠 owner 💠",
-                url="https://t.me/COVIDBABA")]])
-        Photo = "https://telegra.ph/file/e81a49fb4985e64da516c.jpg"
+                url="https://t.me/GHOSTRIDERFIRE0")]])
+        Photo = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
         await message.reply_photo(Photo, caption="""➛ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ\n───────────────────\nsᴘᴇᴄɪᴀʟ ғᴇᴀᴛᴜʀᴇs:\n───────────────────\n
 ᴛʜɪꜱ ʙᴏᴛ ᴏʙꜱᴇʀᴠᴇ ᴀʟʟ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄʜᴀᴛ ᴀɴᴅ ꜱᴛᴏʀᴇ ᴀʟʟ ᴛʜᴇ ᴄʜᴀᴛ ɪɴ  ᴅᴀᴛᴀ ᴀɴᴅ  ᴀʟꜱᴏ ɢɪᴠᴇ ʏᴏᴜʀ ʀᴇᴘʟʏ ᴀꜰᴛᴇʀ ᴅᴀᴛᴀ ᴀɴʏʟʏꜱɪꜱ 
 ᴀɴʏ ᴋᴇʏ ɪꜱ ɴᴏᴛ ꜱᴇᴛ ᴜᴘ ɪɴ ᴛʜɪꜱ ʙᴏᴛ ᴛʜɪꜱ ʙᴏᴛ ᴏɴʟʏ ᴏʙꜱᴇʀᴠᴇ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄʜᴀᴛ ᴀɴᴅ ʀᴇᴘʟʏ ʏᴏᴜʀ Qᴜᴇꜱᴛɪᴏɴꜱ ᴄᴏʀʀᴇᴄᴛʟʏ ᴛʜɪꜱ ɪꜱ ᴛʜᴇ ᴏɴʟʏ ᴛʜɪɴɢ ᴡʜɪᴄʜ ᴍᴀᴋᴇ ᴛʜɪꜱ ʙᴏᴛ ᴛʜᴇ ʙᴇꜱᴛ ᴀɴᴅ ꜱᴘᴇᴄɪᴀʟ 
@@ -52,17 +52,17 @@ async def start(client, message):
         
     else:
         buttons = [[
-            InlineKeyboardButton("➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ➕", url=f"https://t.me/MissShayna_Bot?startgroup=true")
+            InlineKeyboardButton("➕ ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ➕", url=f"https://t.me/GHOST_AI_CHAT_BOT?startgroup=true")
         ],
         
         [
-            InlineKeyboardButton("👥 ᴏғғɪᴄɪᴀʟ ɢʀᴏᴜᴘ", url="https://t.me/+IdSOWT2mDr9hOTQ1"),
-            InlineKeyboardButton("📣 ᴏғғɪᴄɪᴀʟ ᴄʜᴀɴɴᴇʟ", url="https://t.me/+CN0MlYIFGsAyNGI1")
+            InlineKeyboardButton("👥 ᴏғғɪᴄɪᴀʟ ɢʀᴏᴜᴘ", url="https://t.me/Ghostrider_fire"),
+            InlineKeyboardButton("📣 ᴏғғɪᴄɪᴀʟ ᴄʜᴀɴɴᴇʟ", url="https://t.me/xtrchannel")
         ],
         [
-            InlineKeyboardButton("💠 owner 💠", url="https://t.me/COVIDBABA")
+            InlineKeyboardButton("💠 owner 💠", url="https://t.me/GHOSTRIDERFIRE0")
         ]]
-        Photo = "https://telegra.ph/file/e81a49fb4985e64da516c.jpg"
+        Photo = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
         await message.reply_photo(Photo, caption=f"""ʜᴇʟʟᴏ [{message.from_user.first_name}](tg://user?id={message.from_user.id}),
 ɪ ᴀᴍ ᴀɴ ᴀᴅᴠᴀɴᴄᴇᴅ ᴀʀᴛɪғɪᴄᴀʟ ᴀɴᴅ ɴᴇxᴛ ʟᴇᴠᴇʟ ɪɴᴛᴇʟʟɪɢᴇɴᴄᴇ ᴄʜᴀᴛ ʙᴏᴛ.
 ➖➖➖➖➖➖➖➖➖➖➖➖➖
@@ -79,12 +79,12 @@ async def help(client, message):
         buttons = InlineKeyboardMarkup(
             [[InlineKeyboardButton(text="ᴄʟɪᴄᴋ ʜᴇʀᴇ",
                 url=f"t.me/MissShayna_Bot?start=help_")]])
-        Photo = "https://telegra.ph/file/e81a49fb4985e64da516c.jpg"
+        Photo = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
         await message.reply_photo(Photo, caption="ᴄᴏɴᴛᴀᴄᴛ ᴍᴇ ɪɴ ᴘᴇʀsᴏɴᴀʟ sᴡᴇᴇᴛʜᴇᴀʀᴛ",
                             reply_markup=buttons)
         
     else: 
-        Photo = "https://telegra.ph/file/e81a49fb4985e64da516c.jpg"
+        Photo = "https://i.ibb.co/ccjT7Wdn/Chat-GPT-Image-Aug-2-2026-02-27-15-PM.png"
         await message.reply_photo(Photo, caption="""➛ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ\n─────────────────────\nsᴘᴇᴄɪᴀʟ ғᴇᴀᴛᴜʀᴇs:\n
 ᴛʜɪꜱ ʙᴏᴛ ᴏʙꜱᴇʀᴠᴇ ᴀʟʟ ᴛʜᴇ ɢʀᴏᴜᴘ ᴄʜᴀᴛ ᴀɴᴅ ꜱᴛᴏʀᴇ ᴀʟʟ ᴛʜᴇ ᴄʜᴀᴛ ɪɴ  ᴅᴀᴛᴀ ᴀɴᴅ  ᴀʟꜱᴏ ɢɪᴠᴇ ʏᴏᴜʀ ʀᴇᴘʟʏ ᴀꜰᴛᴇʀ ᴅᴀᴛᴀ ᴀɴʏʟʏꜱɪꜱ 
 
@@ -109,14 +109,14 @@ async def chatbotofd(client, message):
            await is_admins(chat_id)
         ):
            return await message.reply_text(
-                "sɪʀ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴅᴍɪɴ.ᴀʙ ᴄʜʟᴀ ᴊᴀᴀ ʙsᴅᴋ ʙɴᴀ ᴅᴜ ᴀᴅᴍɪɴ 😂"
+                "sɪʀ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴅᴍɪɴ.ᴀʙ ᴄʜʟᴀ ᴊᴀᴀ  ʙɴᴀ ᴅᴜ ᴀᴅᴍɪɴ 😂"
             )
     is_natasha = natasha.find_one({"chat_id": message.chat.id})
     if not is_natasha:
         natasha.insert_one({"chat_id": message.chat.id})
         await message.reply_text(f"Shayna ᴄʜᴀᴛʙᴏᴛ ᴅɪsᴀʙʟᴇᴅ\n\nᴅᴀʀʟɪɴɢ ᴏғғ ᴋʏᴜ ᴋʀ ʀʜᴇ ʜᴏ ᴍᴜᴊʜᴇ\nᴛʜɪᴋ ʜᴀɪ ʙʏ ᴠᴀɪsᴇ ʙʜɪ ᴛᴜᴍɴᴇ ᴍᴇʀɪ\nʟɪғᴇ ғᴜᴄᴋᴍ ғᴜᴄᴋ ʙɴᴀ ʀᴋʜɪ ʜᴀɪ\nᴀʙ ᴊᴀᴀ ʙsᴅᴋ ᴋ ᴘᴅʜ ᴋʏᴜ ʀʜᴀ ʜᴀɪ 😂")
     if is_natasha:
-        await message.reply_text(f"Shayna ᴄʜᴀᴛʙᴏᴛ ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ\n\nᴘʜᴇʟᴇ sᴇ ʜɪ ᴏғғ ʜᴜ ᴀʙ ᴋʏᴀ ɢᴀᴀɴᴅ ᴍᴀʀᴏɢᴇ ᴋʏᴀ\nᴊᴀᴀᴏ ᴀʙ ᴛᴜᴍ ᴍᴜᴊʜsᴇ ʙᴀᴀᴛ ᴋʀᴏ\nᴏʀ ʜᴀᴀɴ ᴇɴɢʟɪsʜ ᴍᴇ ᴜsᴇ ᴋʏᴀ ʙᴏʟᴛᴇ ғᴜ*ᴋ ʏᴏᴜ.")
+        await message.reply_text(f"Shayna ᴄʜᴀᴛʙᴏᴛ ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ\n\nᴘʜᴇʟᴇ sᴇ ʜɪ ᴏғғ ʜᴜ ᴀʙ\nᴊᴀᴀᴏ ᴀʙ ᴛᴜᴍ ᴍᴜᴊʜsᴇ ʙᴀᴀᴛ ᴋʀᴏ .")
     
 ### ============================================> 𝙲𝙷𝙰𝚃𝙱𝙾𝚃 𝙾𝙽 <===============================================###
 
@@ -133,11 +133,11 @@ async def chatboton(client, message):
             await is_admins(chat_id)
         ):
             return await message.reply_text(
-                "sɪʀ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴅᴍɪɴ.ᴀʙ ᴄʜʟᴀ ᴊᴀᴀ ʙsᴅᴋ ʙɴᴀ ᴅᴜ ᴀᴅᴍɪɴ 😂"
+                "sɪʀ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴅᴍɪɴ.ᴀʙ ᴄʜʟᴀ ᴊᴀᴀ  ʙɴᴀ ᴅᴜ ᴀᴅᴍɪɴ 😂"
             )
     is_natasha = natasha.find_one({"chat_id": message.chat.id})
     if not is_natasha:           
-        await message.reply_text(f"» ᴄʜᴀᴛʙᴏᴛ ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ\n\nᴀʀᴇ ᴅᴀʀʟɪɴɢ ᴘʜᴇʟᴇ sᴇ ʜɪ ᴏɴ ʜᴜ\nᴏʀ ʏᴇ ᴄᴍᴅ ᴍᴛ ᴅɪʏᴀ ᴋʀᴏ ʙs ᴇᴋ ᴋɪss ᴅᴇ ᴅɪʏᴀ ᴋʀᴏ 😅👉👈😂")
+        await message.reply_text(f"» ᴄʜᴀᴛʙᴏᴛ ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ\n\nᴀʀᴇ ᴅᴀʀʟɪɴɢ ᴘʜᴇʟᴇ sᴇ ʜɪ ᴏɴ ʜᴜ\nᴏʀ ʏᴇ ᴄᴍᴅ ᴍᴛ ᴅɪʏᴀ ᴋʀᴏ  😅👉👈😂")
     if is_natasha:
         natasha.delete_one({"chat_id": message.chat.id})
         await message.reply_text(f"✅ | sᴜᴄᴄᴇssғᴜʟʟʏ\nShayna ᴄʜᴀᴛʙᴏᴛ ᴏɴ ᴏғ ᴛʜɪs ɢʀᴏᴜᴘ ɪs sᴇᴛ ᴛᴏ @{message.chat.username}\n ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ [{message.from_user.first_name}](tg://user?id={message.from_user.id})\nᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴛᴇᴄʜ ǫᴜᴀʀᴅ")
